@@ -21,7 +21,10 @@ build() {
     rm -rf "$srcdir/lxscp"
     mkdir -p "$srcdir/lxscp"
     cd "$(_srcroot)"
-    cp -r lxscp pyproject.toml README.md LICENSE packaging "$srcdir/lxscp/"
+    # Copy only what is needed: $srcdir lives inside packaging/arch, so copying
+    # the whole packaging folder would copy it into itself.
+    cp -r lxscp pyproject.toml README.md LICENSE "$srcdir/lxscp/"
+    cp packaging/lxscp.desktop "$srcdir/lxscp/"
     cd "$srcdir/lxscp"
     find . -name __pycache__ -prune -exec rm -rf {} +
     python -m build --wheel --no-isolation
@@ -30,7 +33,7 @@ build() {
 package() {
     cd "$srcdir/lxscp"
     python -m installer --destdir="$pkgdir" dist/*.whl
-    install -Dm644 packaging/lxscp.desktop "$pkgdir/usr/share/applications/lxscp.desktop"
+    install -Dm644 lxscp.desktop "$pkgdir/usr/share/applications/lxscp.desktop"
     for size in 16 32 48 64 128 256; do
         install -Dm644 "lxscp/icons/lxscp-$size.png" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/lxscp.png"
     done
