@@ -3,6 +3,7 @@ import os
 import pytest
 from PyQt6.QtCore import QItemSelectionModel, QMimeData, Qt, QUrl
 
+from lxscp import __version__
 from lxscp.app import MainWindow, main
 from lxscp.core import RemoteSession
 from lxscp.panels import EntryItem, FileTree
@@ -328,7 +329,7 @@ def test_main_version(capsys):
     with pytest.raises(SystemExit) as info:
         main(["lxscp", "--version"])
     assert info.value.code == 0
-    assert "lxscp 0.1.0" in capsys.readouterr().out
+    assert f"lxscp {__version__}" in capsys.readouterr().out
 
 
 def test_login_dialog_saves_passphrase_and_reopens_last_site(qapp, tmp_path, monkeypatch):

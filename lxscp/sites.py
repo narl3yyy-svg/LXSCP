@@ -75,20 +75,20 @@ class SiteStore:
         else:
             self.passwords.delete(site.name)
         if site.save_passphrase:
-            self.passwords.set(_passphrase_key(site.name), passphrase)
+            self.passwords.set(passphrase_key(site.name), passphrase)
         else:
-            self.passwords.delete(_passphrase_key(site.name))
+            self.passwords.delete(passphrase_key(site.name))
 
     def password(self, site: Site) -> str:
         return self.passwords.get(site.name) if site.save_password else ""
 
     def passphrase(self, site: Site) -> str:
-        return self.passwords.get(_passphrase_key(site.name)) if site.save_passphrase else ""
+        return self.passwords.get(passphrase_key(site.name)) if site.save_passphrase else ""
 
     def delete(self, name: str) -> None:
         self.save_all([s for s in self.load() if s.name != name])
         self.passwords.delete(name)
-        self.passwords.delete(_passphrase_key(name))
+        self.passwords.delete(passphrase_key(name))
         if self.last_used() == name:
             self.set_last_used("")
 
@@ -109,5 +109,5 @@ class SiteStore:
             fh.write(name)
 
 
-def _passphrase_key(name: str) -> str:
+def passphrase_key(name: str) -> str:
     return f"{name} (key passphrase)"

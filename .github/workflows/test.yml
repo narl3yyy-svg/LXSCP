@@ -25,13 +25,67 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: pytest -v
 
-  deb:
+  install-ubuntu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build .deb
-        run: ./packaging/debian/build-deb.sh
+      - name: Install with install.sh
+        run: sudo apt-get update && ./install.sh
+      - name: Start LXSCP
+        run: lxscp --version
+      - name: Install again (update path)
+        run: ./install.sh
+      - name: Uninstall
+        run: ./install.sh --uninstall && ! command -v lxscp
       - uses: actions/upload-artifact@v4
         with:
           name: lxscp-deb
           path: dist/*.deb
+
+  install-arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Prepare Arch container
+        run: pacman -Syu --noconfirm --needed git sudo base-devel
+      - uses: actions/checkout@v4
+      - name: Install with install.sh (as a normal user, like makepkg requires)
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          sudo -u builder ./install.sh
+      - name: Start LXSCP
+        run: lxscp --version
+      - name: Uninstall
+        run: sudo -u builder ./install.sh --uninstall && ! command -v lxscp
+
+  install-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install with installmac.sh
+        run: ./installmac.sh
+      - name: Start LXSCP from the app bundle
+        run: |
+          for app in /Applications/LXSCP.app "$HOME/Applications/LXSCP.app"; do
+            if [ -d "$app" ]; then "$app/Contents/MacOS/LXSCP" --version; exit 0; fi
+          done
+          exit 1
+      - name: Check the app icon was built
+        run: ls /Applications/LXSCP.app/Contents/Resources/lxscp.icns "$HOME/Applications/LXSCP.app/Contents/Resources/lxscp.icns" 2>/dev/null | grep -q icns
+      - name: Run the test suite on macOS
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          VENV="$HOME/Library/Application Support/LXSCP/venv"
+          "$VENV/bin/python" -m pip install --quiet pytest
+          "$VENV/bin/python" -m pytest -v
+      - name: Install again (update path)
+        run: ./installmac.sh
+      - name: Uninstall
+        run: |
+          ./installmac.sh --uninstall
+          test ! -e /Applications/LXSCP.app
+          test ! -e "$HOME/Applications/LXSCP.app"
+          test ! -e "$HOME/Library/Application Support/LXSCP"

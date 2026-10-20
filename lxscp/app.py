@@ -144,11 +144,11 @@ class MainWindow(QMainWindow):
         self.act_edit = self._action("&Edit / Open", self.edit_focused, "F4", "document-edit", SP.SP_FileIcon,
                                      "Open the file; remote files are uploaded back when saved (F4)")
         self.act_rename = self._action("&Rename", self.rename_focused, "F2", "edit-rename", None, "Rename (F2)")
-        self.act_delete = self._action("&Delete", self.delete_selected, ["F8", "Delete"], "edit-delete", SP.SP_TrashIcon,
+        self.act_delete = self._action("&Delete", self.delete_selected, ["F8", "Delete", "Ctrl+Backspace"], "edit-delete", SP.SP_TrashIcon,
                                        "Delete (F8)")
         self.act_mkdir = self._action("&New Folder...", self.create_folder, "F7", "folder-new", SP.SP_FileDialogNewFolder,
                                       "Create a folder (F7)")
-        self.act_props = self._action("&Properties", self.show_properties, "F9", "document-properties",
+        self.act_props = self._action("&Properties", self.show_properties, ["F9", "Ctrl+I"], "document-properties",
                                       SP.SP_FileDialogInfoView, "Properties and permissions (F9)")
         self.act_refresh = self._action("&Refresh", self.refresh_active, "Ctrl+R", "view-refresh", SP.SP_BrowserReload,
                                         "Refresh (Ctrl+R)")
@@ -546,7 +546,7 @@ class MainWindow(QMainWindow):
     def show_about(self):
         QMessageBox.about(
             self, f"About {APP_NAME}",
-            f"<b>{APP_NAME} {__version__}</b><br>A WinSCP-style SFTP client for Linux.<br><br>"
+            f"<b>{APP_NAME} {__version__}</b><br>A WinSCP-style SFTP client for Linux and macOS.<br><br>"
             f"<a href='https://github.com/narl3yyy-svg/LXSCP'>github.com/narl3yyy-svg/LXSCP</a><br>"
             f"&copy; narl3yyy-svg - MIT License",
         )
@@ -636,7 +636,7 @@ def _is_auth_failure(error) -> bool:
 
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv if argv is None else argv)
-    parser = argparse.ArgumentParser(prog="lxscp", description="WinSCP-style SFTP client for Linux")
+    parser = argparse.ArgumentParser(prog="lxscp", description="WinSCP-style SFTP client for Linux and macOS")
     parser.add_argument("url", nargs="?", help="optional session URL, e.g. sftp://user@host:22/path")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args, qt_args = parser.parse_known_args(argv[1:])

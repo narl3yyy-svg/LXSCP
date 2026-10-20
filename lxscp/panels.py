@@ -230,8 +230,10 @@ class FilePanel(QWidget):
         self.tree.itemSelectionChanged.connect(self._update_footer)
         self.tree.focused.connect(self.activated.emit)
         self.path_edit.installEventFilter(self)
-        QShortcut(QKeySequence(Qt.Key.Key_Backspace), self.tree,
-                  context=Qt.ShortcutContext.WidgetShortcut).activated.connect(self.go_up)
+        # Backspace like WinSCP; Alt+Up / Ctrl+Up (Cmd+Up on macOS) like file managers and Finder.
+        for key in ("Backspace", "Alt+Up", "Ctrl+Up"):
+            QShortcut(QKeySequence(key), self.tree,
+                      context=Qt.ShortcutContext.WidgetShortcut).activated.connect(self.go_up)
 
         self.footer = QLabel("")
         layout = QVBoxLayout(self)

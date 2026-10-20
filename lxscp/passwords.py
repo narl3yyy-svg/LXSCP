@@ -91,3 +91,24 @@ class PasswordStore:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2)
         os.replace(tmp, self.path)
+
+
+def forget_all() -> int:
+    """Remove the stored password and passphrase of every saved site. Returns the site count."""
+    from lxscp.sites import SiteStore, passphrase_key
+
+    store = SiteStore()
+    sites = store.load()
+    for site in sites:
+        store.passwords.delete(site.name)
+        store.passwords.delete(passphrase_key(site.name))
+    return len(sites)
+
+
+if __name__ == "__main__":
+    import sys
+
+    if sys.argv[1:] != ["--forget-all"]:
+        print("usage: python3 -m lxscp.passwords --forget-all", file=sys.stderr)
+        sys.exit(2)
+    print(f"Removed saved passwords for {forget_all()} site(s).")
