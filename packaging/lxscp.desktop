@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=LXSCP
+GenericName=SFTP Client
+Comment=WinSCP-style SFTP file transfer client
+Exec=lxscp %u
+Icon=lxscp
+Terminal=false
+Categories=Network;FileTransfer;Qt;
+Keywords=sftp;ssh;scp;winscp;file transfer;
+MimeType=x-scheme-handler/sftp;
+StartupWMClass=lxscp
