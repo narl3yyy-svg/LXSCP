@@ -187,3 +187,26 @@ def test_site_store_passwords(tmp_path):
     store.upsert(Site("b", "h", save_password=True), password="pw2")
     store.delete("b")
     assert store.passwords.get("b") == ""
+
+
+def test_site_store_passphrase_and_last_used(tmp_path):
+    store = SiteStore(str(tmp_path / "sites.json"), PasswordStore(str(tmp_path / "pw.json"), use_keyring=False))
+    store.upsert(Site("k", "h", key_file="~/.ssh/id", save_passphrase=True), passphrase="s3cr3t-kp")
+    site = store.load()[0]
+    assert site.save_passphrase and not site.save_password
+    assert store.passphrase(site) == "s3cr3t-kp" and store.password(site) == ""
+    assert "s3cr3t-kp" not in open(store.path).read()
+
+    store.update_secrets("k", True, "pw", True, "phrase2")
+    site = store.load()[0]
+    assert (store.password(site), store.passphrase(site)) == ("pw", "phrase2")
+    assert site.key_file == "~/.ssh/id"  # other settings untouched
+    store.update_secrets("k", True, "pw", False, "phrase2")  # unticked: forget the passphrase
+    site = store.load()[0]
+    assert store.passphrase(site) == "" and store.passwords.get("k (key passphrase)") == ""
+
+    assert store.last_used() == ""
+    store.set_last_used("k")
+    assert store.last_used() == "k"
+    store.delete("k")
+    assert store.last_used() == "" and store.passwords.get("k") == ""

@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
         self.site_store = site_store or SiteStore()
         self.settings = QSettings("lxscp", "lxscp")
         self.busy = False
+        self.last_login: Optional[dict] = None
 
         self.local = LocalPanel()
         self.remote = RemotePanel(self.session)
@@ -246,15 +247,20 @@ class MainWindow(QMainWindow):
     def show_login(self, initial: Optional[dict] = None):
         if self.busy:
             return
+        if initial is None and self.last_login and not self.last_login.get("site"):
+            # Reopen an unsaved session with what was typed last time (kept in memory only).
+            initial = self.last_login
         dialog = LoginDialog(self.site_store, self, initial=initial)
         if dialog.exec():
-            self.connect_to(dialog.params())
+            self.last_login = dialog.params()
+            self.connect_to(self.last_login)
 
     def connect_to(self, params: dict) -> bool:
         if self.busy:
             return False
         self.disconnect_session()
         params = dict(params)
+        original = dict(params)
         who = f"{params.get('username', '')}@{params['host']}"
         password_prompts = 0
         while True:
@@ -317,6 +323,10 @@ class MainWindow(QMainWindow):
             break
 
         self._update_state()
+        if params.get("site") and (params.get("password") != original.get("password")
+                                   or params.get("passphrase") != original.get("passphrase")):
+            self._remember_prompted_secrets(params)
+        self.last_login = params
         remote_dir = params.get("remote_dir") or self.session.home
         if not self.remote.navigate(remote_dir):
             self.remote.navigate(self.session.home)
@@ -325,6 +335,17 @@ class MainWindow(QMainWindow):
             self.local.navigate(local_dir)
         self.statusBar().showMessage(f"Connected to {self.session.host}", 5000)
         return True
+
+    def _remember_prompted_secrets(self, params: dict) -> None:
+        """Update a saved site's stored password/passphrase with ones typed at a prompt."""
+        site = next((s for s in self.site_store.load() if s.name == params["site"]), None)
+        if site is None or not (site.save_password or site.save_passphrase):
+            return
+        self.site_store.update_secrets(
+            site.name,
+            site.save_password, params.get("password") or self.site_store.password(site),
+            site.save_passphrase, params.get("passphrase") or self.site_store.passphrase(site),
+        )
 
     def disconnect_session(self):
         if self.busy:

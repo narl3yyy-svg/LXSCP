@@ -12,8 +12,9 @@ between them over SSH/SFTP.
 - Dual-pane commander interface (local | remote) with Name, Size, Type, Changed, Rights and Owner columns
 - WinSCP-style **Login** dialog with saved sites
 - SSH password, private-key file (with passphrase) and ssh-agent authentication
-- Optional **Save password** per site, stored in your desktop keyring (GNOME Keyring / KWallet);
-  if you don't save it, LXSCP asks for the password when you connect
+- Optional **Save password** and **Save passphrase** per site, stored in your desktop keyring
+  (GNOME Keyring / KWallet); if you don't save them, LXSCP asks when you connect
+- The login dialog reopens on the last site you used, with its saved password/passphrase filled in
 - Host key verification: unknown keys show the SHA256 fingerprint and must be accepted;
   changed keys are refused (keys from `~/.ssh/known_hosts` are trusted automatically)
 - Upload / download of files and whole folders, with a progress dialog, speed, and **Cancel**
@@ -39,8 +40,12 @@ between them over SSH/SFTP.
 
 Click **New Session** (`Ctrl+N`), fill in *Host name*, *Port number*, *User name* and *Password*, then
 press **Login**. To keep the connection for next time press **Save**, and tick **Save password** if you
-want the password remembered too. Tick **Show** to see what you typed. For key-based logins, choose a
-*Private key file* and, if the key is encrypted, its *Key passphrase*.
+want the password remembered too. For key-based logins, choose a *Private key file* and, if the key is
+encrypted, enter its *Key passphrase* and tick **Save passphrase**. Tick **Show** to see what you typed.
+
+Ticking or unticking the save boxes on a saved site and pressing **Login** updates what is stored, so
+you don't have to press Save again. Next time you open the login dialog (for example after
+**Disconnect**), your last site is already selected with its password and passphrase filled in.
 
 ![LXSCP login dialog](docs/login.png)
 

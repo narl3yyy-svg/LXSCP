@@ -157,8 +157,8 @@ class LoginDialog(QDialog):
         self.save_password = QCheckBox("Save password")
         self.save_password.setToolTip(f"Store the password in the {store.passwords.backend_name}")
         self.show_password = QCheckBox("Show")
-        self.show_password.toggled.connect(lambda on: self.password.setEchoMode(
-            QLineEdit.EchoMode.Normal if on else QLineEdit.EchoMode.Password))
+        self.show_password.setToolTip("Show the password and key passphrase")
+        self.show_password.toggled.connect(self._toggle_show)
         password_row = QHBoxLayout()
         password_row.addWidget(self.password, 1)
         password_row.addWidget(self.show_password)
@@ -166,6 +166,11 @@ class LoginDialog(QDialog):
         self.passphrase = QLineEdit()
         self.passphrase.setEchoMode(QLineEdit.EchoMode.Password)
         self.passphrase.setPlaceholderText("only if the private key is encrypted")
+        self.save_passphrase = QCheckBox("Save passphrase")
+        self.save_passphrase.setToolTip(f"Store the key passphrase in the {store.passwords.backend_name}")
+        passphrase_row = QHBoxLayout()
+        passphrase_row.addWidget(self.passphrase, 1)
+        passphrase_row.addWidget(self.save_passphrase)
         self.key_file = QLineEdit()
         self.key_file.setPlaceholderText("optional, e.g. ~/.ssh/id_ed25519")
         browse = QPushButton("...")
@@ -184,7 +189,7 @@ class LoginDialog(QDialog):
         form.addRow("User name:", self.username)
         form.addRow("Password:", password_row)
         form.addRow("Private key file:", key_row)
-        form.addRow("Key passphrase:", self.passphrase)
+        form.addRow("Key passphrase:", passphrase_row)
         form.addRow("Remote directory:", self.remote_dir)
         form.addRow("Local directory:", self.local_dir)
 
@@ -213,12 +218,28 @@ class LoginDialog(QDialog):
         layout.addWidget(self.site_list)
         layout.addLayout(right, 1)
 
-        self._reload_sites()
         if initial:
+            self._reload_sites(select=initial.get("site", ""))
             self._fill(initial)
             self.password.setText(initial.get("password", ""))
             self.passphrase.setText(initial.get("passphrase", ""))
-        self.host.setFocus()
+            site = self.current_site()
+            self.save_password.setChecked(bool(site and site.save_password))
+            self.save_passphrase.setChecked(bool(site and site.save_passphrase))
+            self.host.setFocus()
+        else:
+            # Reopen on the site used last time, with its saved password/passphrase.
+            self._reload_sites(select=store.last_used())
+            self._on_site_selected(self.site_list.currentItem())
+
+    def _toggle_show(self, on: bool) -> None:
+        mode = QLineEdit.EchoMode.Normal if on else QLineEdit.EchoMode.Password
+        self.password.setEchoMode(mode)
+        self.passphrase.setEchoMode(mode)
+
+    def current_site(self) -> Optional[Site]:
+        item = self.site_list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     # -- sites ---------------------------------------------------------------
 
@@ -245,7 +266,8 @@ class LoginDialog(QDialog):
         self._fill(vars(site) if site else {})
         self.password.setText(self.store.password(site) if site else "")
         self.save_password.setChecked(bool(site and site.save_password))
-        self.passphrase.clear()
+        self.passphrase.setText(self.store.passphrase(site) if site else "")
+        self.save_passphrase.setChecked(bool(site and site.save_passphrase))
         if site is None:
             self.host.setFocus()
         elif self.password.text():
@@ -271,8 +293,7 @@ class LoginDialog(QDialog):
         if not self.host.text().strip():
             QMessageBox.warning(self, "Save session", "Enter a host name first.")
             return
-        item = self.site_list.currentItem()
-        site = item.data(Qt.ItemDataRole.UserRole) if item else None
+        site = self.current_site()
         default = site.name if site else (
             f"{self.username.text().strip()}@{self.host.text().strip()}".lstrip("@")
         )
@@ -285,10 +306,15 @@ class LoginDialog(QDialog):
             QMessageBox.information(self, "Save session", "Enter the password to save it with the site.")
             self.password.setFocus()
             return
+        if self.save_passphrase.isChecked() and not p["passphrase"]:
+            QMessageBox.information(self, "Save session", "Enter the key passphrase to save it with the site.")
+            self.passphrase.setFocus()
+            return
         self.store.upsert(Site(name=name, host=p["host"], port=p["port"], username=p["username"],
                                key_file=p["key_file"], remote_dir=p["remote_dir"], local_dir=p["local_dir"],
-                               save_password=self.save_password.isChecked()),
-                          password=p["password"])
+                               save_password=self.save_password.isChecked(),
+                               save_passphrase=self.save_passphrase.isChecked()),
+                          password=p["password"], passphrase=p["passphrase"])
         self._reload_sites(select=name)
 
     def _delete(self):
@@ -309,6 +335,13 @@ class LoginDialog(QDialog):
         if not self.username.text().strip():
             QMessageBox.warning(self, "Login", "Enter a user name.")
             return
+        site = self.current_site()
+        if site is not None:
+            # Keep the saved secrets in step with the checkboxes, even without pressing Save.
+            p = self.params()
+            self.store.update_secrets(site.name, self.save_password.isChecked(), p["password"],
+                                      self.save_passphrase.isChecked(), p["passphrase"])
+        self.store.set_last_used(site.name if site else "")
         self.accept()
 
     def params(self) -> dict:
@@ -321,6 +354,7 @@ class LoginDialog(QDialog):
             "key_file": self.key_file.text().strip(),
             "remote_dir": self.remote_dir.text().strip(),
             "local_dir": self.local_dir.text().strip(),
+            "site": self.current_site().name if self.current_site() else "",
         }
 
 

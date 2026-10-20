@@ -21,6 +21,7 @@ class Site:
     remote_dir: str = ""
     local_dir: str = ""
     save_password: bool = False
+    save_passphrase: bool = False
 
 
 class SiteStore:
@@ -49,19 +50,64 @@ class SiteStore:
             json.dump([asdict(s) for s in sites], fh, indent=2)
         os.replace(tmp, self.path)
 
-    def upsert(self, site: Site, password: str = "") -> None:
-        site.save_password = bool(site.save_password and password)
-        if site.save_password:
-            self.passwords.set(site.name, password)
-        else:
-            self.passwords.delete(site.name)
+    def upsert(self, site: Site, password: str = "", passphrase: str = "") -> None:
+        self._store_secrets(site, password, passphrase)
         sites = [s for s in self.load() if s.name != site.name]
         sites.append(site)
         self.save_all(sites)
 
+    def update_secrets(self, name: str, save_password: bool, password: str,
+                       save_passphrase: bool, passphrase: str) -> None:
+        """Remember (or forget) the secrets of an existing site, keeping its other settings."""
+        sites = self.load()
+        for site in sites:
+            if site.name == name:
+                site.save_password, site.save_passphrase = save_password, save_passphrase
+                self._store_secrets(site, password, passphrase)
+                self.save_all(sites)
+                return
+
+    def _store_secrets(self, site: Site, password: str, passphrase: str) -> None:
+        site.save_password = bool(site.save_password and password)
+        site.save_passphrase = bool(site.save_passphrase and passphrase)
+        if site.save_password:
+            self.passwords.set(site.name, password)
+        else:
+            self.passwords.delete(site.name)
+        if site.save_passphrase:
+            self.passwords.set(_passphrase_key(site.name), passphrase)
+        else:
+            self.passwords.delete(_passphrase_key(site.name))
+
     def password(self, site: Site) -> str:
         return self.passwords.get(site.name) if site.save_password else ""
+
+    def passphrase(self, site: Site) -> str:
+        return self.passwords.get(_passphrase_key(site.name)) if site.save_passphrase else ""
 
     def delete(self, name: str) -> None:
         self.save_all([s for s in self.load() if s.name != name])
         self.passwords.delete(name)
+        self.passwords.delete(_passphrase_key(name))
+        if self.last_used() == name:
+            self.set_last_used("")
+
+    # The site selected the last time the user logged in.
+    def _last_used_path(self) -> str:
+        return os.path.join(os.path.dirname(self.path), "last_site")
+
+    def last_used(self) -> str:
+        try:
+            with open(self._last_used_path(), encoding="utf-8") as fh:
+                return fh.read().strip()
+        except OSError:
+            return ""
+
+    def set_last_used(self, name: str) -> None:
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self._last_used_path(), "w", encoding="utf-8") as fh:
+            fh.write(name)
+
+
+def _passphrase_key(name: str) -> str:
+    return f"{name} (key passphrase)"

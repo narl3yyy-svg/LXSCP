@@ -6,7 +6,7 @@ from PyQt6.QtCore import QItemSelectionModel, QMimeData, Qt, QUrl
 from lxscp.app import MainWindow, main
 from lxscp.core import RemoteSession
 from lxscp.panels import EntryItem, FileTree
-from lxscp.sites import SiteStore
+from lxscp.sites import Site, SiteStore
 from sftp_server import PASSWORD, USERNAME
 
 
@@ -329,3 +329,84 @@ def test_main_version(capsys):
         main(["lxscp", "--version"])
     assert info.value.code == 0
     assert "lxscp 0.1.0" in capsys.readouterr().out
+
+
+def test_login_dialog_saves_passphrase_and_reopens_last_site(qapp, tmp_path, monkeypatch):
+    from lxscp import dialogs
+    from lxscp.dialogs import LoginDialog
+
+    store = SiteStore(str(tmp_path / "s.json"))
+    store.upsert(Site("other", "other.example.com"))
+    d = LoginDialog(store)
+    assert d.current_site() is None  # first run: "New Site"
+    d.host.setText("example.com")
+    d.username.setText("bob")
+    d.key_file.setText("~/.ssh/id_ed25519")
+    d.passphrase.setText("my key phrase")
+    d.save_passphrase.setChecked(True)
+    monkeypatch.setattr(dialogs.QInputDialog, "getText", staticmethod(lambda *a, **k: ("keyed", True)))
+    d._save()
+    d._login()
+    assert d.result() == dialogs.QDialog.DialogCode.Accepted
+    assert d.params()["site"] == "keyed"
+
+    # Disconnect and log in again: the dialog opens on the same site, passphrase filled in.
+    d2 = LoginDialog(store)
+    assert d2.current_site().name == "keyed"
+    assert d2.passphrase.text() == "my key phrase" and d2.save_passphrase.isChecked()
+    assert d2.key_file.text() == "~/.ssh/id_ed25519"
+    assert d2.params()["passphrase"] == "my key phrase"
+    d2.show_password.setChecked(True)
+    assert d2.passphrase.echoMode() == dialogs.QLineEdit.EchoMode.Normal
+
+
+def test_login_ticking_save_without_pressing_save(qapp, tmp_path):
+    from lxscp.dialogs import LoginDialog
+
+    store = SiteStore(str(tmp_path / "s.json"))
+    store.upsert(Site("srv", "example.com", username="bob"))
+    d = LoginDialog(store)
+    d.site_list.setCurrentRow(1)
+    d.password.setText("pw")
+    d.save_password.setChecked(True)
+    d.passphrase.setText("phrase")
+    d.save_passphrase.setChecked(True)
+    d._login()
+    d2 = LoginDialog(store)
+    assert (d2.password.text(), d2.passphrase.text()) == ("pw", "phrase")
+
+
+def test_unsaved_session_is_remembered_after_disconnect(window, sftp_server, monkeypatch):
+    from lxscp import app as app_module
+
+    seen = []
+
+    class FakeLogin:
+        def __init__(self, store, parent, initial=None):
+            seen.append(initial)
+
+        def exec(self):
+            return True
+
+        def params(self):
+            return {"host": "127.0.0.1", "port": sftp_server.port, "username": USERNAME,
+                    "password": PASSWORD, "passphrase": "kp", "site": ""}
+
+    monkeypatch.setattr(app_module, "LoginDialog", FakeLogin)
+    window.answers = [True]
+    window.show_login()
+    assert window.session.is_connected() and seen == [None]
+    window.disconnect_session()
+    window.show_login()
+    assert seen[1]["password"] == PASSWORD and seen[1]["passphrase"] == "kp"
+
+
+def test_prompted_password_updates_saved_site(window, sftp_server):
+    window.site_store.upsert(Site("srv", "127.0.0.1", sftp_server.port, USERNAME, save_password=True),
+                             password="old-wrong")
+    window.answers = [True]
+    window.passwords = [PASSWORD]
+    assert window.connect_to({"host": "127.0.0.1", "port": sftp_server.port, "username": USERNAME,
+                              "password": "old-wrong", "site": "srv"})
+    site = window.site_store.load()[0]
+    assert window.site_store.password(site) == PASSWORD
