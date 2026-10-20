@@ -27,7 +27,7 @@ Version: ${VERSION}
 Section: net
 Priority: optional
 Architecture: all
-Depends: python3 (>= 3.10), python3-pyqt6, python3-paramiko
+Depends: python3 (>= 3.10), python3-pyqt6, python3-paramiko, python3-keyring
 Installed-Size: ${SIZE}
 Maintainer: narl3yyy-svg <narl3yyy@gmail.com>
 Homepage: https://github.com/narl3yyy-svg/LXSCP

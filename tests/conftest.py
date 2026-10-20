@@ -14,6 +14,8 @@ from sftp_server import PASSWORD, USERNAME, SFTPTestServer  # noqa: E402
 @pytest.fixture(autouse=True)
 def isolated_config(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    # Never touch the developer's real desktop keyring from tests.
+    monkeypatch.setattr("lxscp.passwords._keyring", lambda: None)
     return tmp_path / "config"
 
 

@@ -9,7 +9,7 @@ pkgdesc="WinSCP-style graphical SFTP client"
 arch=('any')
 url="https://github.com/narl3yyy-svg/LXSCP"
 license=('MIT')
-depends=('python' 'python-pyqt6' 'python-paramiko')
+depends=('python' 'python-pyqt6' 'python-paramiko' 'python-keyring')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
 source=()
 

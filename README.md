@@ -10,8 +10,10 @@ between them over SSH/SFTP.
 ## Features
 
 - Dual-pane commander interface (local | remote) with Name, Size, Type, Changed, Rights and Owner columns
-- WinSCP-style **Login** dialog with saved sites (passwords are never written to disk)
-- Password, private-key file and ssh-agent authentication
+- WinSCP-style **Login** dialog with saved sites
+- SSH password, private-key file (with passphrase) and ssh-agent authentication
+- Optional **Save password** per site, stored in your desktop keyring (GNOME Keyring / KWallet);
+  if you don't save it, LXSCP asks for the password when you connect
 - Host key verification: unknown keys show the SHA256 fingerprint and must be accepted;
   changed keys are refused (keys from `~/.ssh/known_hosts` are trusted automatically)
 - Upload / download of files and whole folders, with a progress dialog, speed, and **Cancel**
@@ -33,6 +35,15 @@ between them over SSH/SFTP.
 | `Backspace` | Parent directory | `Enter` | Open folder / file |
 | `Tab` | Switch panel | `Ctrl+Q` | Quit |
 
+## Connecting
+
+Click **New Session** (`Ctrl+N`), fill in *Host name*, *Port number*, *User name* and *Password*, then
+press **Login**. To keep the connection for next time press **Save**, and tick **Save password** if you
+want the password remembered too. Tick **Show** to see what you typed. For key-based logins, choose a
+*Private key file* and, if the key is encrypted, its *Key passphrase*.
+
+![LXSCP login dialog](docs/login.png)
+
 ## Install
 
 Clone the repository first:
@@ -51,7 +62,7 @@ Then either run `./install.sh` (it detects Ubuntu or Arch and does the steps bel
 sudo apt install ./dist/lxscp_0.1.0_all.deb
 ```
 
-The package depends on `python3-pyqt6` and `python3-paramiko`, which apt installs
+The package depends on `python3-pyqt6`, `python3-paramiko` and `python3-keyring`, which apt installs
 automatically (Ubuntu 22.04 or newer).
 
 ### Arch Linux (PKGBUILD)
@@ -77,7 +88,9 @@ python3 -m venv .venv
 - Ubuntu/Debian: `sudo apt remove lxscp`
 - Arch: `sudo pacman -R lxscp`
 
-Settings live in `~/.config/lxscp/` (saved sites and accepted host keys).
+Settings live in `~/.config/lxscp/` (saved sites and accepted host keys). Saved passwords are kept in
+the desktop keyring; only if no keyring is available are they written to `~/.config/lxscp/passwords.json`
+(readable only by your user).
 
 ## Development
 

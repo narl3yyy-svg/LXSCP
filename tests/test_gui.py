@@ -17,9 +17,17 @@ def window(qapp, tmp_path, local_root, monkeypatch):
     win.answers = []  # answers for confirm(); default "yes"
     win.texts = []    # answers for ask_text(); default: accept the proposed text
     win.errors = []
+    win.passwords = []  # answers for ask_password(); default: cancel
+    win.password_prompts = []
     monkeypatch.setattr(win, "confirm", lambda title, text: win.answers.pop(0) if win.answers else True)
     monkeypatch.setattr(win, "ask_text", lambda title, label, text="": win.texts.pop(0) if win.texts else text)
     monkeypatch.setattr(win, "show_error", lambda title, text: win.errors.append((title, text)))
+
+    def ask_password(title, label):
+        win.password_prompts.append(label)
+        return win.passwords.pop(0) if win.passwords else None
+
+    monkeypatch.setattr(win, "ask_password", ask_password)
     win.local.navigate(str(local_root))
     win.show()
     yield win
@@ -85,10 +93,35 @@ def test_connect_accepts_host_key_once(window, sftp_server):
     assert window.answers == [False]  # no prompt this time
 
 
-def test_bad_password_shows_error(window, sftp_server):
+def test_wrong_password_prompts_again(window, sftp_server):
     window.answers = [True]
+    window.passwords = [PASSWORD]
+    assert window.connect_to({"host": "127.0.0.1", "port": sftp_server.port,
+                              "username": USERNAME, "password": "nope"})
+    assert len(window.password_prompts) == 1
+    assert "Access denied" in window.password_prompts[0] and "tester@127.0.0.1" in window.password_prompts[0]
+
+
+def test_missing_password_is_asked_for(window, sftp_server):
+    window.answers = [True]
+    window.passwords = [PASSWORD]
+    assert window.connect_to({"host": "127.0.0.1", "port": sftp_server.port, "username": USERNAME})
+    assert window.password_prompts == ["Password for tester@127.0.0.1:"]
+
+
+def test_cancelled_password_prompt(window, sftp_server):
+    window.answers = [True]
+    assert not window.connect_to({"host": "127.0.0.1", "port": sftp_server.port, "username": USERNAME})
+    assert len(window.password_prompts) == 1 and not window.errors
+    assert not window.session.is_connected()
+
+
+def test_gives_up_after_three_wrong_passwords(window, sftp_server):
+    window.answers = [True]
+    window.passwords = ["a", "b", "c"]
     assert not window.connect_to({"host": "127.0.0.1", "port": sftp_server.port,
                                   "username": USERNAME, "password": "nope"})
+    assert len(window.password_prompts) == 3
     assert window.errors and window.errors[-1][0] == "Authentication failed"
 
 
@@ -241,7 +274,7 @@ def test_edit_remote_file_uploads_on_save(window, sftp_server, remote_root, monk
     assert not os.path.exists(tmp_dir)  # temp copies are cleaned up
 
 
-def test_login_dialog_saves_sites(qapp, tmp_path):
+def test_login_dialog_initial_values(qapp, tmp_path):
     from lxscp.dialogs import LoginDialog
 
     store = SiteStore(str(tmp_path / "s.json"))
@@ -249,6 +282,46 @@ def test_login_dialog_saves_sites(qapp, tmp_path):
     p = d.params()
     assert (p["host"], p["port"], p["username"], p["password"]) == ("example.com", 2222, "bob", "pw")
     assert d.site_list.count() == 1  # only "New Site"
+
+
+@pytest.mark.parametrize("save_password", [True, False])
+def test_login_dialog_save_password(qapp, tmp_path, monkeypatch, save_password):
+    from lxscp import dialogs
+    from lxscp.dialogs import LoginDialog
+
+    store = SiteStore(str(tmp_path / "s.json"))
+    d = LoginDialog(store)
+    d.host.setText("example.com")
+    d.username.setText("bob")
+    d.password.setText("hunter2")
+    d.save_password.setChecked(save_password)
+    monkeypatch.setattr(dialogs.QInputDialog, "getText", staticmethod(lambda *a, **k: ("My server", True)))
+    d._save()
+    assert "hunter2" not in open(store.path).read()  # never in sites.json
+
+    # Re-open the dialog and pick the saved site, as a user would.
+    d2 = LoginDialog(store)
+    d2.site_list.setCurrentRow(1)
+    assert d2.host.text() == "example.com" and d2.username.text() == "bob"
+    assert d2.save_password.isChecked() is save_password
+    assert d2.password.text() == ("hunter2" if save_password else "")
+
+    d2.password.setText("")
+    d2.show_password.setChecked(True)
+    assert d2.password.echoMode() == dialogs.QLineEdit.EchoMode.Normal
+
+
+def test_connect_with_saved_site_password(window, sftp_server):
+    from lxscp.dialogs import LoginDialog
+    from lxscp.sites import Site
+
+    window.site_store.upsert(Site("srv", "127.0.0.1", sftp_server.port, USERNAME, save_password=True),
+                             password=PASSWORD)
+    d = LoginDialog(window.site_store, window)
+    d.site_list.setCurrentRow(1)
+    window.answers = [True]
+    assert window.connect_to(d.params())
+    assert window.password_prompts == []
 
 
 def test_main_version(capsys):

@@ -19,6 +19,7 @@ from lxscp.core import (
     validate_host,
     validate_port,
 )
+from lxscp.passwords import PasswordStore
 from lxscp.sites import Site, SiteStore
 
 
@@ -123,7 +124,7 @@ def test_site_store_roundtrip(tmp_path):
     assert [s.name for s in sites] == ["alpha", "web"]
     assert sites[1].host == "example.org" and sites[1].username == "alice"
     assert stat.S_IMODE(os.stat(store.path).st_mode) == 0o600
-    assert "password" not in open(store.path).read()
+    assert "\"password\"" not in open(store.path).read()
     store.delete("alpha")
     assert [s.name for s in store.load()] == ["web"]
 
@@ -134,3 +135,55 @@ def test_site_store_ignores_garbage(tmp_path):
     assert SiteStore(str(path)).load() == []
     path.write_text('[{"name": "x", "host": "h", "bogus": 1}, {"name": "no-host"}]')
     assert [s.name for s in SiteStore(str(path)).load()] == ["x"]
+
+
+def test_password_store_file_fallback(tmp_path):
+    store = PasswordStore(str(tmp_path / "pw.json"), use_keyring=False)
+    assert store.get("x") == ""
+    store.set("x", "secret")
+    store.set("y", "other")
+    assert store.get("x") == "secret" and store.get("y") == "other"
+    assert stat.S_IMODE(os.stat(store.path).st_mode) == 0o600
+    store.delete("x")
+    assert store.get("x") == "" and store.get("y") == "other"
+
+
+class FakeKeyring:
+    def __init__(self):
+        self.data = {}
+
+    def get_password(self, service, name):
+        return self.data.get((service, name))
+
+    def set_password(self, service, name, value):
+        self.data[(service, name)] = value
+
+    def delete_password(self, service, name):
+        self.data.pop((service, name), None)
+
+
+def test_password_store_prefers_keyring(tmp_path):
+    store = PasswordStore(str(tmp_path / "pw.json"), use_keyring=False)
+    store._keyring = FakeKeyring()
+    store.set("site", "pw")
+    assert store._keyring.data == {("lxscp", "site"): "pw"}
+    assert not os.path.exists(store.path)  # nothing written to the file
+    assert store.get("site") == "pw"
+    store.delete("site")
+    assert store._keyring.data == {}
+
+
+def test_site_store_passwords(tmp_path):
+    store = SiteStore(str(tmp_path / "sites.json"), PasswordStore(str(tmp_path / "pw.json"), use_keyring=False))
+    store.upsert(Site("a", "h", save_password=True), password="pw")
+    site = store.load()[0]
+    assert site.save_password and store.password(site) == "pw"
+    assert "pw" not in open(store.path).read().replace('"save_password"', "")
+
+    store.upsert(Site("a", "h", save_password=False), password="pw")  # unticked: forget it
+    site = store.load()[0]
+    assert not site.save_password and store.password(site) == "" and store.passwords.get("a") == ""
+
+    store.upsert(Site("b", "h", save_password=True), password="pw2")
+    store.delete("b")
+    assert store.passwords.get("b") == ""

@@ -1,4 +1,4 @@
-"""Saved sessions ("sites"), stored as JSON. Passwords are never saved."""
+"""Saved sessions ("sites"), stored as JSON. Passwords are kept separately (see passwords.py)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, fields
 from typing import List, Optional
 
 from lxscp.core import config_dir
+from lxscp.passwords import PasswordStore
 
 
 @dataclass
@@ -19,11 +20,13 @@ class Site:
     key_file: str = ""
     remote_dir: str = ""
     local_dir: str = ""
+    save_password: bool = False
 
 
 class SiteStore:
-    def __init__(self, path: Optional[str] = None):
+    def __init__(self, path: Optional[str] = None, passwords: Optional[PasswordStore] = None):
         self.path = path or os.path.join(config_dir(), "sites.json")
+        self.passwords = passwords or PasswordStore()
 
     def load(self) -> List[Site]:
         try:
@@ -46,10 +49,19 @@ class SiteStore:
             json.dump([asdict(s) for s in sites], fh, indent=2)
         os.replace(tmp, self.path)
 
-    def upsert(self, site: Site) -> None:
+    def upsert(self, site: Site, password: str = "") -> None:
+        site.save_password = bool(site.save_password and password)
+        if site.save_password:
+            self.passwords.set(site.name, password)
+        else:
+            self.passwords.delete(site.name)
         sites = [s for s in self.load() if s.name != site.name]
         sites.append(site)
         self.save_all(sites)
 
+    def password(self, site: Site) -> str:
+        return self.passwords.get(site.name) if site.save_password else ""
+
     def delete(self, name: str) -> None:
         self.save_all([s for s in self.load() if s.name != name])
+        self.passwords.delete(name)

@@ -153,6 +153,19 @@ class LoginDialog(QDialog):
         self.username = QLineEdit()
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password.setPlaceholderText("SSH password")
+        self.save_password = QCheckBox("Save password")
+        self.save_password.setToolTip(f"Store the password in the {store.passwords.backend_name}")
+        self.show_password = QCheckBox("Show")
+        self.show_password.toggled.connect(lambda on: self.password.setEchoMode(
+            QLineEdit.EchoMode.Normal if on else QLineEdit.EchoMode.Password))
+        password_row = QHBoxLayout()
+        password_row.addWidget(self.password, 1)
+        password_row.addWidget(self.show_password)
+        password_row.addWidget(self.save_password)
+        self.passphrase = QLineEdit()
+        self.passphrase.setEchoMode(QLineEdit.EchoMode.Password)
+        self.passphrase.setPlaceholderText("only if the private key is encrypted")
         self.key_file = QLineEdit()
         self.key_file.setPlaceholderText("optional, e.g. ~/.ssh/id_ed25519")
         browse = QPushButton("...")
@@ -169,8 +182,9 @@ class LoginDialog(QDialog):
         form.addRow("File protocol:", self.protocol)
         form.addRow("Host name:", host_row)
         form.addRow("User name:", self.username)
-        form.addRow("Password:", self.password)
+        form.addRow("Password:", password_row)
         form.addRow("Private key file:", key_row)
+        form.addRow("Key passphrase:", self.passphrase)
         form.addRow("Remote directory:", self.remote_dir)
         form.addRow("Local directory:", self.local_dir)
 
@@ -203,6 +217,7 @@ class LoginDialog(QDialog):
         if initial:
             self._fill(initial)
             self.password.setText(initial.get("password", ""))
+            self.passphrase.setText(initial.get("passphrase", ""))
         self.host.setFocus()
 
     # -- sites ---------------------------------------------------------------
@@ -228,8 +243,15 @@ class LoginDialog(QDialog):
         site = item.data(Qt.ItemDataRole.UserRole) if item else None
         self.delete_button.setEnabled(site is not None)
         self._fill(vars(site) if site else {})
-        self.password.clear()
-        (self.password if site else self.host).setFocus()
+        self.password.setText(self.store.password(site) if site else "")
+        self.save_password.setChecked(bool(site and site.save_password))
+        self.passphrase.clear()
+        if site is None:
+            self.host.setFocus()
+        elif self.password.text():
+            self.login_button.setFocus()
+        else:
+            self.password.setFocus()
 
     def _fill(self, values: dict) -> None:
         self.host.setText(values.get("host", ""))
@@ -259,8 +281,14 @@ class LoginDialog(QDialog):
         if not ok or not name:
             return
         p = self.params()
+        if self.save_password.isChecked() and not p["password"]:
+            QMessageBox.information(self, "Save session", "Enter the password to save it with the site.")
+            self.password.setFocus()
+            return
         self.store.upsert(Site(name=name, host=p["host"], port=p["port"], username=p["username"],
-                               key_file=p["key_file"], remote_dir=p["remote_dir"], local_dir=p["local_dir"]))
+                               key_file=p["key_file"], remote_dir=p["remote_dir"], local_dir=p["local_dir"],
+                               save_password=self.save_password.isChecked()),
+                          password=p["password"])
         self._reload_sites(select=name)
 
     def _delete(self):
@@ -289,6 +317,7 @@ class LoginDialog(QDialog):
             "port": self.port.value(),
             "username": self.username.text().strip(),
             "password": self.password.text(),
+            "passphrase": self.passphrase.text(),
             "key_file": self.key_file.text().strip(),
             "remote_dir": self.remote_dir.text().strip(),
             "local_dir": self.local_dir.text().strip(),

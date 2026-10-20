@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "narl3yyy-svg" }]
 requires-python = ">=3.10"
-dependencies = ["PyQt6>=6.2", "paramiko>=2.11"]
+dependencies = ["PyQt6>=6.2", "paramiko>=2.11", "keyring>=23"]
 classifiers = [
     "Environment :: X11 Applications :: Qt",
     "License :: OSI Approved :: MIT License",

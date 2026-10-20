@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -233,6 +234,10 @@ class MainWindow(QMainWindow):
         value, ok = QInputDialog.getText(self, title, label, text=text)
         return value if ok else None
 
+    def ask_password(self, title: str, label: str) -> Optional[str]:
+        value, ok = QInputDialog.getText(self, title, label, QLineEdit.EchoMode.Password)
+        return value if ok else None
+
     def show_error(self, title: str, text: str) -> None:
         QMessageBox.critical(self, title, text)
 
@@ -249,12 +254,16 @@ class MainWindow(QMainWindow):
         if self.busy:
             return False
         self.disconnect_session()
+        params = dict(params)
+        who = f"{params.get('username', '')}@{params['host']}"
+        password_prompts = 0
         while True:
             self.busy = True
 
             def work(worker):
                 self.session.connect(params["host"], params.get("port", 22), params.get("username", ""),
-                                     params.get("password") or None, params.get("key_file") or None)
+                                     params.get("password") or None, params.get("key_file") or None,
+                                     params.get("passphrase") or None)
                 if worker.cancel_event.is_set():
                     self.session.disconnect()
                     raise TransferCancelled()
@@ -285,7 +294,21 @@ class MainWindow(QMainWindow):
             if isinstance(error, TransferCancelled):
                 self.statusBar().showMessage("Connection cancelled", 5000)
                 return False
-            if isinstance(error, paramiko.AuthenticationException):
+            if isinstance(error, paramiko.PasswordRequiredException):
+                passphrase = self.ask_password("Key passphrase", f"Passphrase for key '{params.get('key_file')}':")
+                if passphrase is None:
+                    return False
+                params["passphrase"] = passphrase
+                continue
+            if _is_auth_failure(error) and password_prompts < 3:
+                password_prompts += 1
+                note = "Access denied.\n\n" if params.get("password") else ""
+                password = self.ask_password("Password", f"{note}Password for {who}:")
+                if password is None:
+                    return False
+                params["password"] = password
+                continue
+            if _is_auth_failure(error):
                 self.show_error("Authentication failed", f"Access denied for user '{params.get('username')}'.\n\n{error}")
                 return False
             if error is not None:
@@ -581,6 +604,13 @@ class MainWindow(QMainWindow):
         for path in self.edit_dirs:
             shutil.rmtree(path, ignore_errors=True)
         super().closeEvent(event)
+
+
+def _is_auth_failure(error) -> bool:
+    if isinstance(error, paramiko.AuthenticationException):
+        return True
+    # Raised when no password was given and no key/agent was usable.
+    return type(error) is paramiko.SSHException and "authentication methods" in str(error)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
