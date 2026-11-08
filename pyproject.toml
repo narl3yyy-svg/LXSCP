@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,13 +7,13 @@ name = "lxscp"
 version = "0.2.0"
 description = "A WinSCP-style graphical SFTP client for Linux and macOS"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "narl3yyy-svg" }]
 requires-python = ">=3.10"
 dependencies = ["PyQt6>=6.2", "paramiko>=2.11", "keyring>=23"]
 classifiers = [
     "Environment :: X11 Applications :: Qt",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
@@ -27,10 +27,10 @@ Homepage = "https://github.com/narl3yyy-svg/LXSCP"
 lxscp = "lxscp.app:main"
 
 [tool.setuptools]
-packages = ["lxscp"]
+packages = ["lxscp", "lxscp.icons"]
 
 [tool.setuptools.package-data]
-lxscp = ["icons/*.png", "icons/*.svg"]
+"lxscp.icons" = ["*.png", "*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

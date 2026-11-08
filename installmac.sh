@@ -205,6 +205,17 @@ link_cli() {
     info "No writable bin folder for a 'lxscp' command; open the app with: open -a LXSCP"
 }
 
+# Pins PyQt6 to a release whose Qt still runs on this macOS version. pip's wheel tags
+# alone are not enough: Qt 6.8+ wheels are tagged macOS 10.14 but need macOS 12.
+write_constraints() {
+    local major
+    major="$(sw_vers -productVersion | cut -d. -f1)"
+    : > "$SUPPORT_DIR/constraints.txt"
+    if [ "$major" -lt 12 ]; then
+        printf 'PyQt6<6.8\nPyQt6-Qt6<6.8\n' > "$SUPPORT_DIR/constraints.txt"
+    fi
+}
+
 install_lxscp() {
     local py
     require_macos
@@ -224,7 +235,16 @@ install_lxscp() {
 
     info "Installing LXSCP $VERSION and its dependencies (PyQt6, paramiko, keyring)"
     "$VENV/bin/python" -m pip install --quiet --upgrade pip
-    "$VENV/bin/python" -m pip install --quiet --upgrade "$REPO_DIR"
+    write_constraints
+    # --only-binary: PyQt6 must come as a prebuilt wheel. Without it, pip falls back to
+    # compiling PyQt6 from source when the newest release has no wheel for this macOS
+    # version (e.g. PyQt6 6.12 needs macOS 14), which fails with a "qmake" error.
+    "$VENV/bin/python" -m pip install --quiet --upgrade \
+        --only-binary "PyQt6,PyQt6-Qt6,PyQt6-sip" \
+        --constraint "$SUPPORT_DIR/constraints.txt" \
+        "$REPO_DIR" \
+        || die "could not install LXSCP's dependencies (see the pip output above).
+If the error mentions PyQt6, no prebuilt PyQt6 is available for macOS $(sw_vers -productVersion) on $(uname -m)."
     # Always replace LXSCP itself, even when the version number did not change.
     "$VENV/bin/python" -m pip install --quiet --force-reinstall --no-deps "$REPO_DIR"
     "$VENV/bin/python" -c "import lxscp.app" || die "LXSCP was installed but cannot be started."
