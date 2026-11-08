@@ -127,7 +127,8 @@ is needed.
    [Homebrew](https://brew.sh) is installed, it installs Python with Homebrew; otherwise it tells you
    to install Python from [python.org](https://www.python.org/downloads/macos/) first;
 2. creates a private Python environment in `~/Library/Application Support/LXSCP/` and installs
-   LXSCP with PyQt6, paramiko and keyring into it;
+   LXSCP with PyQt6, paramiko and keyring into it. PyQt6 is only installed as a prebuilt package,
+   using the newest release that supports your macOS version (see the table below);
 3. creates **LXSCP.app** in `/Applications` (or `~/Applications` if `/Applications` isn't writable),
    with its icon, so it shows up in Launchpad and Spotlight;
 4. adds an `lxscp` command if `/opt/homebrew/bin` or `/usr/local/bin` is writable.
@@ -138,13 +139,40 @@ Start LXSCP from Launchpad/Applications, or run `open -a LXSCP`.
 - `./installmac.sh --purge` also deletes saved sites, accepted host keys, LXSCP's preferences and
   the saved passwords/passphrases in your Keychain (it asks for confirmation first).
 
+PyQt6 version installed per macOS version:
+
+| macOS | PyQt6 |
+| --- | --- |
+| 14 Sonoma or newer | latest |
+| 12 Monterey, 13 Ventura | 6.11 (newer releases need macOS 14) |
+| 11 Big Sur | 6.7 (Qt 6.8 and newer need macOS 12) |
+
+<details>
+<summary>Troubleshooting: <code>PyProjectOptionException: qmake</code> / "Preparing metadata (pyproject.toml) did not run successfully"</summary>
+
+This error came from older versions of `installmac.sh` on macOS 13 or older. pip found no prebuilt
+PyQt6 for that macOS version and tried to compile PyQt6 from source, which needs Qt's `qmake`.
+Update the repository and run the installer again; the existing environment is reused:
+
+```bash
+git pull
+./installmac.sh
+```
+
+If it still fails, the installer prints your macOS version and processor type. Please include
+them when you open an issue.
+
+</details>
+
 ### Run from source (any platform)
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install --only-binary PyQt6,PyQt6-Qt6,PyQt6-sip -r requirements.txt
 .venv/bin/python -m lxscp
 ```
+
+`--only-binary` makes pip use a prebuilt PyQt6 instead of trying to compile it from source.
 
 ## Where settings are stored
 
